@@ -47,7 +47,7 @@ class MaskedMimicDataSetInHospitalMortality(Dataset):
         sample[2].reverse()
         sample[3].reverse()
         mask_len = len(sample[0])
-        mask = torch.rand(mask_len) < 0.1 # randomly masking 10 percent of the values
+        mask = torch.rand(mask_len) < 0.2 # randomly masking 10 percent of the values
         val_input = torch.tensor(sample[1], dtype=torch.float)
         val_input[mask] = 0
         variable_input = torch.cat([
