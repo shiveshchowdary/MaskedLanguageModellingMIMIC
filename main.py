@@ -1,14 +1,14 @@
 MAX_LEN = 256
 batch_size = 32
-d_model = 50
-num_heads = 4
-N = 2
+d_model = 128
+num_heads = 8
+N = 6
 num_variables = 18 
 num_variables += 1 #for no variable embedding while doing padding
-d_ff = 100
+d_ff = 512
 epochs = 75
 learning_rate = 1e-5
-drop_out = 0.2
+drop_out = 0.1
 sinusoidal = False
 th_val_roc = 0.84
 th_val_pr = 0.48
@@ -77,7 +77,7 @@ train_dataloader_decompensation = DataLoader(train_ds_decompensation, batch_size
 val_dataloader_decompensation = DataLoader(val_ds_decompensation, batch_size = 1)
 
 model = Model(d_model, num_heads, d_ff, num_variables, N, sinusoidal).to(DEVICE)
-criterion = nn.MSELoss()
+criterion = nn.MSELoss(reduce=False)
 optimizer = torch.optim.Adam(model.parameters(), lr = learning_rate)
 
 total_params = sum(p.numel() for p in model.parameters())
@@ -97,14 +97,18 @@ def calculate_loss(model, data_loader):
             outputs = torch.where(torch.logical_or(pretraining_mask==0,pretraining_mask==-1), torch.tensor(0.0), outputs)
             labels = torch.where(torch.logical_or(pretraining_mask==0,pretraining_mask==-1), torch.tensor(0.0), batch['labels'])
             loss = criterion(outputs, labels)
+            loss = torch.where(pretraining_mask==1, loss, torch.zeros_like(loss))
+            loss = torch.sum(loss)
+            N = torch.sum(pretraining_mask == 1).item()
+            loss /= N
             total_loss += loss.item()
     return total_loss/len(data_loader)
 
-for epoch in range(epochs):
+for epoch in range(1):
     total_loss = 0
     model.train()
     n = 0
-    for batch in tqdm(train_dataloader_inhospital, desc=f'Epoch {epoch + 1}/{epochs}', leave=False, mininterval=1):
+    for batch in tqdm(train_dataloader_decompensation, desc=f'Epoch {epoch + 1}/{epochs}', leave=False, mininterval=1):
         inp = batch['encoder_input']
         mask = batch['encoder_mask']
         pretraining_mask = batch['pretraining_mask']
@@ -112,6 +116,10 @@ for epoch in range(epochs):
         outputs = torch.where(torch.logical_or(pretraining_mask==0,pretraining_mask==-1), torch.tensor(0.0), outputs)
         labels = torch.where(torch.logical_or(pretraining_mask==0,pretraining_mask==-1), torch.tensor(0.0), batch['labels'])
         loss = criterion(outputs, labels)
+        loss = torch.where(pretraining_mask==1, loss, torch.zeros_like(loss))
+        loss = torch.sum(loss)
+        N = torch.sum(pretraining_mask == 1).item()
+        loss /= N
         total_loss += loss.item()
         optimizer.zero_grad()
         loss.backward()
